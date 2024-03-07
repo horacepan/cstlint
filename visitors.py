@@ -3,13 +3,8 @@ from dataclasses import dataclass
 
 import libcst as cst
 from libcst.metadata import PositionProvider
-
-
-@dataclass
-class StyleViolation:
-    name: str
-    line_number: int
-    message: str
+from style_violation import StyleViolation
+from violation_error_codes import ViolationErrorCode
 
 
 @dataclass
@@ -40,12 +35,21 @@ class StyleViolationsVisitor(cst.CSTVisitor, ABC):
         super().__init__()
         self.violations = []
 
+    def get_node_line_info(self, node: cst.CSTNode) -> tuple[int, int, int, int]:
+        code_range = self.get_metadata(PositionProvider, node)
+        return (
+            code_range.start.line,
+            code_range.start.column,
+            code_range.end.line,
+            code_range.end.column,
+        )
 
-class EvalExecVisitor(StyleViolationsVisitor):
+
+class DangerousFunctionVisitor(StyleViolationsVisitor):
+    VIOLATION_ERROR_CODE = ViolationErrorCode.DANGEROUS_FUNCTION
 
     def visit_Call(self, node: cst.Call):
         code_range = self.get_metadata(PositionProvider, node)
-        start_line_num = code_range.start.line
 
         if isinstance(node.func, cst.Name) and node.func.value in [
             "eval",
@@ -55,28 +59,28 @@ class EvalExecVisitor(StyleViolationsVisitor):
         ]:
             self.violations.append(
                 StyleViolation(
-                    name="Invalid function used",
-                    line_number=start_line_num,
-                    message=f"Dangerous call found: {node.func.value}",
+                    error_code=self.VIOLATION_ERROR_CODE,
+                    code_range=code_range,
                 )
             )
 
 
 class NestedFunctionVisitor(StyleViolationsVisitor):
+    VIOLATION_ERROR_CODE = ViolationErrorCode.NESTED_FUNCTION
+
     def __init__(self):
         super().__init__()
         self.function_stack = []
 
     def visit_FunctionDef(self, node: cst.FunctionDef):
         code_range = self.get_metadata(PositionProvider, node)
-        start_line_num = code_range.start.line
-        fname = node.name.value
 
         if len(self.function_stack) > 0:
-            parent_name = self.function_stack[-1].name.value
-            msg = f"Function {fname} defined within {parent_name}"
             self.violations.append(
-                StyleViolation("Nested function", start_line_num, msg)
+                StyleViolation(
+                    error_code=self.VIOLATION_ERROR_CODE,
+                    code_range=code_range,
+                )
             )
 
         self.function_stack.append(node)
@@ -86,6 +90,8 @@ class NestedFunctionVisitor(StyleViolationsVisitor):
 
 
 class FunctionArgAssignVisitor(StyleViolationsVisitor):
+    VIOLATION_ERROR_CODE = ViolationErrorCode.FUNCTION_ARG_ASSIGN
+
     def __init__(self):
         super().__init__()
         self.function_stack = []
@@ -95,7 +101,6 @@ class FunctionArgAssignVisitor(StyleViolationsVisitor):
         Detect if a variable being assigned to as one of the arguments
         """
         code_range = self.get_metadata(PositionProvider, node)
-        start_line_num = code_range.start.line
         current_function = self.function_stack[-1]
 
         for target in node.targets:
@@ -106,9 +111,8 @@ class FunctionArgAssignVisitor(StyleViolationsVisitor):
                 value = extract_value_from_assign_target(target)
                 self.violations.append(
                     StyleViolation(
-                        name="Assign to function arg",
-                        line_number=start_line_num,
-                        message=f"Function {fn_name} arg {value} is being modified",
+                        error_code=self.VIOLATION_ERROR_CODE,
+                        code_range=code_range,
                     )
                 )
 
@@ -128,14 +132,14 @@ class FunctionArgAssignVisitor(StyleViolationsVisitor):
 
 
 class LambdaVisitor(StyleViolationsVisitor):
+    VIOLATION_ERROR_CODE = ViolationErrorCode.LAMBDA
+
     def visit_Lambda(self, node: cst.Lambda):
         code_range = self.get_metadata(PositionProvider, node)
-        start_line_num = code_range.start.line
         self.violations.append(
             StyleViolation(
-                name="Lambda",
-                line_number=start_line_num,
-                message=f"Lambda found at line: {start_line_num}",
+                error_code=self.VIOLATION_ERROR_CODE,
+                code_range=code_range,
             )
         )
 

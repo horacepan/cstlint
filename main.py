@@ -1,22 +1,17 @@
-import logging
+import argparse
 
 import libcst as cst
 from visitors import AttrDecoratorVisitor
-from visitors import EvalExecVisitor
+from visitors import DangerousFunctionVisitor
 from visitors import FunctionArgAssignVisitor
 from visitors import LambdaVisitor
 from visitors import NestedFunctionVisitor
 
 
-logging.basicConfig(level=logging.INFO, format="[%(levelname)s][%(name)s] %(message)s")
-logger = logging.getLogger(__name__)
-
-
-def run_evals(code: str):
-    code_lines = code.split("\n")
+def run_evals(code: str, file_name: str) -> None:
     tree = cst.parse_module(code)
     visitors = [
-        EvalExecVisitor(),
+        DangerousFunctionVisitor(),
         NestedFunctionVisitor(),
         LambdaVisitor(),
         FunctionArgAssignVisitor(),
@@ -29,28 +24,34 @@ def run_evals(code: str):
 
     for visitor in visitors:
         for violation in visitor.violations:
-            print(f"{violation} | Line: {code_lines[violation.line_number - 1]}")
+            # print(violation.log_message(code_lines))
+            print(f"{file_name}:{violation.format()}")
+
+            """
+            pylint format is:
+            {filename}:{line_number}:{column_number}: {error_code}: {message} ({symbol})
+            """
+
+
+def main(args: argparse.Namespace) -> None:
+    if args.file:
+        with open(args.file, "r") as file:
+            lines = file.readlines()
+            source_code = "".join(lines)
+        print("Source code:")
+        print("-" * 80)
+        for idx, line in enumerate(lines):
+            print("{:4d} | {}".format(idx + 1, line), end="")
+        print("-" * 80)
+        run_evals(source_code, args.file)
+    else:
+        print("Please specify a file path using --file argument.")
 
 
 if __name__ == "__main__":
-    source = """
-def set_value(a, b, c):
-    a = 10
-    b[10] = 0
-    c.x = 100
-    d[0] += 30
+    # run like: python main.py --file "path/to/file.py"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--file", type=str, help="Path to the file to be checked")
+    args = parser.parse_args()
 
-def a():
-    def b():
-        return 10
-    return b()
-eval("1+1")
-
-
-@attrs.s(auto_attribs=True, frozen=True)
-class MyData:
-    x: int
-    y: str
-"""
-    # visitor = check_style(source)
-    run_evals(source)
+    main(args)

@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import libcst as cst
-from libcst.metadata import ParentNodeProvider
 from libcst.metadata import PositionProvider
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s][%(name)s] %(message)s")
@@ -15,6 +14,7 @@ class StyleViolation:
     name: str
     line_number: int
     message: str
+
 
 @dataclass
 class FunctionInfo:
@@ -37,29 +37,38 @@ def value_from_assign_target(target: cst.AssignTarget) -> str:
     raise ValueError(f"Unsupported assign target type: {target}")
 
 
-class EvalCheckerVisitor(cst.CSTVisitor):
-    def __init__(self) -> None:
+class StyleViolationsVisitor(cst.CSTVisitor):
+    METADATA_DEPENDENCIES = (PositionProvider,)
+
+    def __init__(self):
         super().__init__()
-        self.dangerous_calls = []
         self.violations = []
+
+
+class EvalExecVisitor(StyleViolationsVisitor):
 
     def visit_Call(self, node: cst.Call):
         # Check if the call is a Name node and matches 'eval', 'getattr', or 'setattr'
+        code_range = self.get_metadata(PositionProvider, node)
+        start_line_num = code_range.start.line
+
         if isinstance(node.func, cst.Name) and node.func.value in [
             "eval",
             "exec",
             "getattr",
             "setattr",
         ]:
-            self.dangerous_calls.append((node.func.value, node))
-            logger.info("Dangerous call found: %s", node.func.value)
+            self.violations.append(StyleViolation(
+                name="Invalid function used",
+                line_number=start_line_num,
+                message=f"Dangerous call found: {node.func.value}",
+            ))
 
 
-class NestedFunctionVisitor(cst.CSTVisitor):
-    METADATA_DEPENDENCIES = (PositionProvider,)
+class NestedFunctionVisitor(StyleViolationsVisitor):
     def __init__(self):
+        super().__init__()
         self.function_stack = []
-        self.violations = []
 
     def visit_FunctionDef(self, node: cst.FunctionDef):
         code_range = self.get_metadata(PositionProvider, node)
@@ -76,24 +85,10 @@ class NestedFunctionVisitor(cst.CSTVisitor):
     def leave_FunctionDef(self, node: cst.FunctionDef):
         self.function_stack.pop()
 
-class StyleGuideCheckerVisitor(cst.CSTVisitor):
-    METADATA_DEPENDENCIES = (ParentNodeProvider, PositionProvider)
-
-    def __init__(self, source_code: str):
+class FunctionArgAssignVisitor(StyleViolationsVisitor):
+    def __init__(self):
         super().__init__()
-        self.source_code_lines = source_code.splitlines()
-        self.inline_functions = []
-        self.args = {}
-        self.assigned_targets = []
         self.function_stack = []
-        self.function_args = []
-        self.violations = []
-
-    def visit_Assign_value(self, node: cst.Assign):
-        """
-        RHS of an assign statement
-        """
-        pass
 
     def visit_Assign_targets(self, node: cst.Assign):
         """
@@ -101,30 +96,26 @@ class StyleGuideCheckerVisitor(cst.CSTVisitor):
         """
         code_range = self.get_metadata(PositionProvider, node)
         start_line_num = code_range.start.line
+        current_function = self.function_stack[-1]
 
         for target in node.targets:
             assign_target = value_from_assign_target(target)
-            self.assigned_targets.append(assign_target)
 
-            if assign_target in self.function_stack[-1].arg_names:
-                fn_name = self.function_stack[-1].name
+            if assign_target in current_function.arg_names:
+                fn_name = current_function.name
                 value = value_from_assign_target(target)
-                logger.info(
-                    f"Function {fn_name} arg {value} is being modified: {self.source_code_lines[start_line_num-1]}"
-                )
+                self.violations.append(StyleViolation(
+                    name="Assign to function arg",
+                    line_number=start_line_num,
+                    message=f"Function {fn_name} arg {value} is being modified"
+                ))
 
     def visit_FunctionDef(self, node: cst.FunctionDef):
-        parent = self.get_metadata(ParentNodeProvider, node)
         code_range = self.get_metadata(PositionProvider, node)
         start_line_num = code_range.start
         fn_args = []
         for param in node.params.params:
             fn_args.append(param.name.value)
-
-        # Just checks that the parent is is a function too
-        # TODO: check ancestors
-        if isinstance(parent, cst.FunctionDef):
-            logger.info(f"Inline function found at line: {start_line_num}")
 
         fn_info = FunctionInfo(
             name=node.name.value,
@@ -135,31 +126,22 @@ class StyleGuideCheckerVisitor(cst.CSTVisitor):
     def leave_FunctionDef(self, node: cst.FunctionDef):
         self.function_stack.pop()
 
+
+class LambdaVisitor(StyleViolationsVisitor):
     def visit_Lambda(self, node: cst.Lambda):
         code_range = self.get_metadata(PositionProvider, node)
         start_line_num = code_range.start.line
-        self.inline_functions.append(("Lambda", start_line_num))
-        logger.info(f"Lambda found at line: {start_line_num}")
+        self.violations.append(StyleViolation(
+            name="Lambda",
+            line_number=start_line_num,
+            message=f"Lambda found at line: {start_line_num}",
+        ))
 
-
-def check_style(code: str):
-    tree = cst.parse_module(code)
-    wrapper = cst.MetadataWrapper(tree)
-    visitor = StyleGuideCheckerVisitor(code)
-    wrapper.visit(visitor)
-    return visitor
-
-
-def check_eval(code: str):
-    tree = cst.parse_module(code)
-    wrapper = cst.MetadataWrapper(tree)
-    visitor = EvalCheckerVisitor()
-    wrapper.visit(visitor)
-    return visitor
 
 def run_evals(code: str):
+    code_lines = code.split("\n")
     tree = cst.parse_module(code)
-    visitors = [NestedFunctionVisitor()]
+    visitors = [EvalExecVisitor(), NestedFunctionVisitor(), LambdaVisitor(), FunctionArgAssignVisitor()]
     wrapper = cst.MetadataWrapper(tree)
 
     for visitor in visitors:
@@ -167,7 +149,7 @@ def run_evals(code: str):
 
     for visitor in visitors:
         for violation in visitor.violations:
-            print(violation)
+            print(f"{violation} | Line: {code_lines[violation.line_number - 1]}")
 
 if __name__ == "__main__":
     source = """
@@ -176,14 +158,12 @@ def set_value(a, b, c):
     b[10] = 0
     c.x = 100
     d[0] += 30
-"""
-    source_eval = """
+
 def a():
     def b():
         return 10
     return b()
+eval("1+1")
 """
     # visitor = check_style(source)
-    visitor = check_eval(source_eval)
-
-    run_evals(source_eval)
+    run_evals(source)

@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 
 from libcst._position import CodeRange
-from violation_error_codes import ViolationErrorCode
+
+from cstlint.violation_error_codes import ViolationErrorCode
 
 
 @dataclass

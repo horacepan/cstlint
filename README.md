@@ -1,7 +1,16 @@
-# Installation
+# CSTLint
+`cstlint` is a Python code style checker built on top of LibCST. It helps enforce specific style rules in Python codebases.
+It currently checks for a few rules:
+- use of eval/exec/getattr/setattr
+- nested functions
+- lambdas
+- mutable default args
+- assignment to function inputs
+
+## Installation
 ```
-git clone https://github.com/horacepan/imbue_trial.git
-cd imbue_trial
+git clone https://github.com/horacepan/cstlint.git
+cd cstlint
 ```
 
 2) Setup a virtual environment
@@ -10,12 +19,18 @@ python3 -m venv venv
 source venv/bin/activate
 ```
 
-3) Install requirements
+3) Install `cslint`
 ```
-pip install -r requirements
+pip install .
 ```
 
-# Sample Usage
+Or install in editable mode if you are doing active development:
 ```
-python main.py --file {filename}
+pip install -e .
+```
+
+
+## Sample Usage
+```
+cstlint {filename}
 ```

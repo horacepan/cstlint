@@ -4,8 +4,9 @@ from dataclasses import dataclass
 import libcst as cst
 from libcst import matchers as m
 from libcst.metadata import PositionProvider
-from style_violation import StyleViolation
-from violation_error_codes import ViolationErrorCode
+
+from cstlint.style_violation import StyleViolation
+from cstlint.violation_error_codes import ViolationErrorCode
 
 
 @dataclass

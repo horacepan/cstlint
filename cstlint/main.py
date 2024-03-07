@@ -1,12 +1,12 @@
 import argparse
 
 import libcst as cst
-from visitors import AttrDecoratorVisitor
-from visitors import DangerousFunctionVisitor
-from visitors import FunctionArgAssignVisitor
-from visitors import LambdaVisitor
-from visitors import MutableDefaultArgVisitor
-from visitors import NestedFunctionVisitor
+from cstlint.visitors import AttrDecoratorVisitor
+from cstlint.visitors import DangerousFunctionVisitor
+from cstlint.visitors import FunctionArgAssignVisitor
+from cstlint.visitors import LambdaVisitor
+from cstlint.visitors import MutableDefaultArgVisitor
+from cstlint.visitors import NestedFunctionVisitor
 
 
 def run_style_checks(code: str, file_name: str) -> None:
@@ -33,7 +33,11 @@ def run_style_checks(code: str, file_name: str) -> None:
             """
 
 
-def main(args: argparse.Namespace) -> None:
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("file", type=str, help="Path to the file to be checked")
+    args = parser.parse_args()
+
     if args.file:
         with open(args.file, "r") as file:
             lines = file.readlines()
@@ -50,9 +54,4 @@ def main(args: argparse.Namespace) -> None:
 
 
 if __name__ == "__main__":
-    # run like: python main.py --file "path/to/file.py"
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--file", type=str, help="Path to the file to be checked")
-    args = parser.parse_args()
-
-    main(args)
+    main()

@@ -104,6 +104,9 @@ class FunctionArgAssignVisitor(StyleViolationsVisitor):
         if not self.function_stack:
             return
 
+        if self.function_stack[-1].name in ["__init__", "__new__"]:
+            return
+
         code_range = self.get_metadata(PositionProvider, node)
         current_function = self.function_stack[-1]
 
@@ -127,6 +130,7 @@ class FunctionArgAssignVisitor(StyleViolationsVisitor):
             name=node.name.value,
             arg_names=fn_args,
         )
+
         self.function_stack.append(fn_info)
 
     def leave_FunctionDef(self, node: cst.FunctionDef):

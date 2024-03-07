@@ -26,12 +26,10 @@ def run_style_checks(code: str, file_name: str) -> None:
 
     for visitor in visitors:
         for violation in visitor.violations:
-            # print(violation.log_message(code_lines))
             print(f"{file_name}:{violation.format()}")
-
             """
-            pylint format is:
-            {filename}:{line_number}:{column_number}: {error_code}: {message} ({symbol})
+            mimic pylint format which is:
+            {filename}:{line_number}:{column_number}: {error_code}: {standard error message}
             """
 
 

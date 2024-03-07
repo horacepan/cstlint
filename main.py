@@ -6,7 +6,7 @@ import libcst as cst
 from libcst.metadata import ParentNodeProvider
 from libcst.metadata import PositionProvider
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="[%(levelname)s][%(name)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -29,6 +29,23 @@ def value_from_assign_target(target: cst.AssignTarget) -> str:
     elif isinstance(target.target, cst.Attribute):
         return target.target.value.value
     raise ValueError(f"Unsupported assign target type: {target}")
+
+
+class EvalCheckerVisitor(cst.CSTVisitor):
+    def __init__(self) -> None:
+        super().__init__()
+        self.dangerous_calls = []
+
+    def visit_Call(self, node: cst.Call):
+        # Check if the call is a Name node and matches 'eval', 'getattr', or 'setattr'
+        if isinstance(node.func, cst.Name) and node.func.value in [
+            "eval",
+            "exec",
+            "getattr",
+            "setattr",
+        ]:
+            self.dangerous_calls.append((node.func.value, node))
+            logger.info("Dangerous call found: %s", node.func.value)
 
 
 class StyleGuideCheckerVisitor(cst.CSTVisitor):
@@ -104,6 +121,14 @@ def check_style(code: str):
     return visitor
 
 
+def check_eval(code: str):
+    tree = cst.parse_module(code)
+    wrapper = cst.MetadataWrapper(tree)
+    visitor = EvalCheckerVisitor()
+    wrapper.visit(visitor)
+    return visitor
+
+
 if __name__ == "__main__":
     source = """
 def set_value(a, b, c):
@@ -112,4 +137,9 @@ def set_value(a, b, c):
     c.x = 100
     d[0] += 30
 """
-    visitor = check_style(source)
+    source_eval = """
+    x = eval('10')
+"""
+    s2 = "eval('10')"
+    # visitor = check_style(source)
+    visitor = check_eval(s2)

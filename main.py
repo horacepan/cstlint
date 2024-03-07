@@ -11,6 +11,12 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class StyleViolation:
+    name: str
+    line_number: int
+    message: str
+
+@dataclass
 class FunctionInfo:
     name: str
     arg_names: list[Any]
@@ -35,6 +41,7 @@ class EvalCheckerVisitor(cst.CSTVisitor):
     def __init__(self) -> None:
         super().__init__()
         self.dangerous_calls = []
+        self.violations = []
 
     def visit_Call(self, node: cst.Call):
         # Check if the call is a Name node and matches 'eval', 'getattr', or 'setattr'
@@ -48,6 +55,27 @@ class EvalCheckerVisitor(cst.CSTVisitor):
             logger.info("Dangerous call found: %s", node.func.value)
 
 
+class NestedFunctionVisitor(cst.CSTVisitor):
+    METADATA_DEPENDENCIES = (PositionProvider,)
+    def __init__(self):
+        self.function_stack = []
+        self.violations = []
+
+    def visit_FunctionDef(self, node: cst.FunctionDef):
+        code_range = self.get_metadata(PositionProvider, node)
+        start_line_num = code_range.start.line
+        fname = node.name.value
+
+        if len(self.function_stack) > 0:
+            parent_name = self.function_stack[-1].name.value
+            msg = f"Function {fname} defined within {parent_name}"
+            self.violations.append(StyleViolation("Nested function", start_line_num, msg))
+
+        self.function_stack.append(node)
+
+    def leave_FunctionDef(self, node: cst.FunctionDef):
+        self.function_stack.pop()
+
 class StyleGuideCheckerVisitor(cst.CSTVisitor):
     METADATA_DEPENDENCIES = (ParentNodeProvider, PositionProvider)
 
@@ -59,6 +87,7 @@ class StyleGuideCheckerVisitor(cst.CSTVisitor):
         self.assigned_targets = []
         self.function_stack = []
         self.function_args = []
+        self.violations = []
 
     def visit_Assign_value(self, node: cst.Assign):
         """
@@ -128,6 +157,17 @@ def check_eval(code: str):
     wrapper.visit(visitor)
     return visitor
 
+def run_evals(code: str):
+    tree = cst.parse_module(code)
+    visitors = [NestedFunctionVisitor()]
+    wrapper = cst.MetadataWrapper(tree)
+
+    for visitor in visitors:
+        wrapper.visit(visitor)
+
+    for visitor in visitors:
+        for violation in visitor.violations:
+            print(violation)
 
 if __name__ == "__main__":
     source = """
@@ -138,8 +178,12 @@ def set_value(a, b, c):
     d[0] += 30
 """
     source_eval = """
-    x = eval('10')
+def a():
+    def b():
+        return 10
+    return b()
 """
-    s2 = "eval('10')"
     # visitor = check_style(source)
-    visitor = check_eval(s2)
+    visitor = check_eval(source_eval)
+
+    run_evals(source_eval)

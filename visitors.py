@@ -2,6 +2,7 @@ from abc import ABC
 from dataclasses import dataclass
 
 import libcst as cst
+from libcst import matchers as m
 from libcst.metadata import PositionProvider
 from style_violation import StyleViolation
 from violation_error_codes import ViolationErrorCode
@@ -100,6 +101,9 @@ class FunctionArgAssignVisitor(StyleViolationsVisitor):
         """
         Detect if a variable being assigned to as one of the arguments
         """
+        if not self.function_stack:
+            return
+
         code_range = self.get_metadata(PositionProvider, node)
         current_function = self.function_stack[-1]
 
@@ -107,8 +111,6 @@ class FunctionArgAssignVisitor(StyleViolationsVisitor):
             assign_target = extract_value_from_assign_target(target)
 
             if assign_target in current_function.arg_names:
-                fn_name = current_function.name
-                value = extract_value_from_assign_target(target)
                 self.violations.append(
                     StyleViolation(
                         error_code=self.VIOLATION_ERROR_CODE,
@@ -144,9 +146,35 @@ class LambdaVisitor(StyleViolationsVisitor):
         )
 
 
+class MutableDefaultArgVisitor(StyleViolationsVisitor):
+    VIOLATION_ERROR_CODE = ViolationErrorCode.MUTABLE_DEFAULT_ARG
+
+    def visit_FunctionDef(self, node: cst.FunctionDef):
+        for param in node.params.params:
+            if param.default is not None:
+                if isinstance(param.default, (cst.List, cst.Dict, cst.Set)):
+                    code_range = self.get_metadata(PositionProvider, node)
+                    self.violations.append(
+                        StyleViolation(
+                            error_code=self.VIOLATION_ERROR_CODE,
+                            code_range=code_range,
+                        )
+                    )
+
+                # Alternatively, using matchers for more complex checks
+                elif m.matches(param.default, m.List() | m.Dict() | m.Set()):
+                    code_range = self.get_metadata(PositionProvider, param.default)
+                    self.violations.append(
+                        StyleViolation(
+                            error_code=self.VIOLATION_ERROR_CODE,
+                            code_range=code_range,
+                        )
+                    )
+
+
 class AttrDecoratorVisitor(StyleViolationsVisitor):
     """
-    two attr decorators allowed:
+    Only two attr decorators allowed:
     @attr.s(auto_attribs=True, frozen=True)
 
     and
@@ -155,8 +183,6 @@ class AttrDecoratorVisitor(StyleViolationsVisitor):
 
     # def visit_ClassDef_decorators(self, node: cst.Attribute):
     #     code_range = self.get_metadata(PositionProvider, node)
-    #     start_line_num = code_range.start.line
-
     #     self.violations.append(
     #         StyleViolation(
     #             name="Attribute",

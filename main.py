@@ -5,10 +5,11 @@ from visitors import AttrDecoratorVisitor
 from visitors import DangerousFunctionVisitor
 from visitors import FunctionArgAssignVisitor
 from visitors import LambdaVisitor
+from visitors import MutableDefaultArgVisitor
 from visitors import NestedFunctionVisitor
 
 
-def run_evals(code: str, file_name: str) -> None:
+def run_style_checks(code: str, file_name: str) -> None:
     tree = cst.parse_module(code)
     visitors = [
         DangerousFunctionVisitor(),
@@ -16,6 +17,7 @@ def run_evals(code: str, file_name: str) -> None:
         LambdaVisitor(),
         FunctionArgAssignVisitor(),
         AttrDecoratorVisitor(),
+        MutableDefaultArgVisitor(),
     ]
     wrapper = cst.MetadataWrapper(tree)
 
@@ -43,7 +45,8 @@ def main(args: argparse.Namespace) -> None:
         for idx, line in enumerate(lines):
             print("{:4d} | {}".format(idx + 1, line), end="")
         print("-" * 80)
-        run_evals(source_code, args.file)
+
+        run_style_checks(source_code, args.file)
     else:
         print("Please specify a file path using --file argument.")
 

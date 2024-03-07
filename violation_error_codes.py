@@ -19,6 +19,7 @@ class ViolationErrorCode(Enum):
         "Assignment to function arguments within the function body is discouraged.",
     )
     ATTR_DECORATOR = ("E1005", "Incorrect usage of @attr.s decorator detected.")
+    MUTABLE_DEFAULT_ARG = ("E1006", "Use of mutable default argument is discouraged.")
 
     def __init__(self, code, message):
         self.code = code

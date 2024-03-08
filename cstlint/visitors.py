@@ -28,6 +28,7 @@ def extract_value_from_assign_target(target: cst.AssignTarget) -> str:
     elif isinstance(target.target, cst.Attribute):
         return target.target.value.value
     else:
+        # TODO: hack to avoid the tuple assignment case for now
         return None
 
     raise ValueError(f"Unsupported assign target type: {target}")

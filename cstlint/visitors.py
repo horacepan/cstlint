@@ -2,11 +2,10 @@ from abc import ABC
 from dataclasses import dataclass
 
 import libcst as cst
-from libcst import matchers as m
-from libcst.metadata import PositionProvider
-
 from cstlint.style_violation import StyleViolation
 from cstlint.violation_error_codes import ViolationErrorCode
+from libcst import matchers as m
+from libcst.metadata import PositionProvider
 
 
 @dataclass
@@ -45,6 +44,14 @@ class StyleViolationsVisitor(cst.CSTVisitor, ABC):
             code_range.end.line,
             code_range.end.column,
         )
+
+    @classmethod
+    def parse_and_evaluate_violations(cls, source_code: str) -> list[StyleViolation]:
+        tree = cst.parse_module(source_code)
+        wrapper = cst.MetadataWrapper(tree)
+        visitor = cls()
+        wrapper.visit(visitor)
+        return visitor.violations
 
 
 class DangerousFunctionVisitor(StyleViolationsVisitor):
@@ -97,6 +104,25 @@ class FunctionArgAssignVisitor(StyleViolationsVisitor):
     def __init__(self):
         super().__init__()
         self.function_stack = []
+
+    # TODO: not very DRY but not that much time so I'll leave it as is
+    def visit_AugAssign(self, node: cst.AugAssign) -> None:
+        if not self.function_stack:
+            return
+        if self.function_stack[-1].name in ["__init__", "__new__"]:
+            return
+
+        code_range = self.get_metadata(PositionProvider, node)
+        current_function = self.function_stack[-1]
+        assign_target = node.target.value
+        assign_target = extract_value_from_assign_target(node)
+        if assign_target in current_function.arg_names:
+            self.violations.append(
+                StyleViolation(
+                    error_code=self.VIOLATION_ERROR_CODE,
+                    code_range=code_range,
+                )
+            )
 
     def visit_Assign_targets(self, node: cst.Assign):
         """

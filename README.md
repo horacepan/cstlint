@@ -1,6 +1,6 @@
 # CSTLint
-`cstlint` is a Python code style checker built on top of LibCST. It helps enforce specific style rules in Python codebases.
-It currently checks for a few rules:
+`cstlint` is a Python code style checker that leverages `libcst`. It helps enforce specific style rules in a Python file.
+It currently checks for the following rules:
 - use of eval/exec/getattr/setattr
 - nested functions
 - lambdas
@@ -32,5 +32,12 @@ pip install -e .
 
 ## Sample Usage
 ```
-cstlint {filename}
+cstlint {path/to/file}
+```
+
+## Tests
+To run the unit tests:
+```
+python -m unittest discover -s tests -v
+
 ```

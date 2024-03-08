@@ -1,6 +1,7 @@
 from abc import ABC
 from dataclasses import dataclass
 
+import attr
 import libcst as cst
 from cstlint.style_violation import StyleViolation
 from cstlint.violation_error_codes import ViolationErrorCode
@@ -26,6 +27,8 @@ def extract_value_from_assign_target(target: cst.AssignTarget) -> str:
         return target.target.value.value
     elif isinstance(target.target, cst.Attribute):
         return target.target.value.value
+
+    breakpoint()
     raise ValueError(f"Unsupported assign target type: {target}")
 
 
@@ -205,20 +208,68 @@ class MutableDefaultArgVisitor(StyleViolationsVisitor):
 
 class AttrDecoratorVisitor(StyleViolationsVisitor):
     """
-    Only two attr decorators allowed:
-    @attr.s(auto_attribs=True, frozen=True)
+    From the style guide:
+        Only two attr decorators allowed:
+        @attr.s(auto_attribs=True, frozen=True)
+        @attr.s(auto_attribs=True)
+        - therefore auto_attribs must be true
 
-    and
-    @attr.s(auto_attribs=True)
+        `kw_only=True` and `repr=False` are currently the only permitted additional attrs fields.
+
+    Therefore, this visitor checks:
+    - check that a @attr.s decorator only uses keywords: auto_attribs, frozen, kw_only, repr
+    - auto_attribs must be present and must be True
+    - kw_only (if present) must be True
+    - repr (if present) must be False
     """
 
-    # def visit_ClassDef_decorators(self, node: cst.Attribute):
-    #     code_range = self.get_metadata(PositionProvider, node)
-    #     self.violations.append(
-    #         StyleViolation(
-    #             name="Attribute",
-    #             line_number=start_line_num,
-    #             message=f"Attribute found at line: {start_line_num}",
-    #         )
-    #     )
-    pass
+    def _validate_attrs_args(self):
+        pass
+
+    def visit_ClassDef_decorators(self, node: cst.Call):
+        code_range = self.get_metadata(PositionProvider, node)
+
+        for decorator in node.decorators:
+            decorator_name = decorator.decorator.func.value
+            if decorator_name.value != "attr":
+                continue
+
+            assert decorator.decorator.func.attr.value == "s"
+
+            for arg in decorator.decorator.args:
+                if arg.keyword.value not in [
+                    "auto_attribs",
+                    "frozen",
+                    "kw_only",
+                    "repr",
+                ]:
+                    self.violations.append(
+                        StyleViolation(
+                            error_code=ViolationErrorCode.ATTR_DECORATOR,
+                            code_range=code_range,
+                        )
+                    )
+
+                if arg.keyword.value == "auto_attribs" and arg.value.value != "True":
+                    self.violations.append(
+                        StyleViolation(
+                            error_code=ViolationErrorCode.ATTR_DECORATOR,
+                            code_range=code_range,
+                        )
+                    )
+
+                if arg.keyword.value == "kw_only" and arg.value.value != "True":
+                    self.violations.append(
+                        StyleViolation(
+                            error_code=ViolationErrorCode.ATTR_DECORATOR,
+                            code_range=code_range,
+                        )
+                    )
+
+                if arg.keyword.value == "repr" and arg.value.value != "False":
+                    self.violations.append(
+                        StyleViolation(
+                            error_code=ViolationErrorCode.ATTR_DECORATOR,
+                            code_range=code_range,
+                        )
+                    )

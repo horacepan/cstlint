@@ -35,9 +35,13 @@ pip install -e .
 cstlint {path/to/file}
 ```
 
+To see the offending lines, set the `--verbose` flag:
+```
+cstlint {path/to/file} --verbose
+```
+
 ## Tests
 To run the unit tests:
 ```
 python -m unittest discover -s tests -v
-
 ```

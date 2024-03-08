@@ -34,11 +34,10 @@ pip install -e .
 ```
 cstlint {path/to/file}
 ```
-
-To see the offending lines, set the `--verbose` flag:
-```
-cstlint {path/to/file} --verbose
-```
+Additional flags you can set:
+- `--verbose`: show the violating line
+- `--show-source`: show the source code before the violations (useful for debugging)
+- `--quiet`: exit after the first violation
 
 ## Tests
 To run the unit tests:

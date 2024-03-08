@@ -27,8 +27,9 @@ def extract_value_from_assign_target(target: cst.AssignTarget) -> str:
         return target.target.value.value
     elif isinstance(target.target, cst.Attribute):
         return target.target.value.value
+    else:
+        return None
 
-    breakpoint()
     raise ValueError(f"Unsupported assign target type: {target}")
 
 

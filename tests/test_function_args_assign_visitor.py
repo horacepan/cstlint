@@ -13,6 +13,8 @@ class TestFunctionArgsVisitor(unittest.TestCase):
         ("def f(x):\n    x /= 10", 1),
         ("def f(x, y):\n    y += 10", 1),
         ("def f(x, y):\n    y.value += 10", 1),
+        ("def f(x, y):\n    x, z = 1, 2", 1),
+        ("def f(x, y):\n    x, y = 1, 2", 2),
     ]
 
     def test_usage(self):

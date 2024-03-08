@@ -18,20 +18,21 @@ class FunctionInfo:
         return arg in self.args
 
 
-def extract_value_from_assign_target(target: cst.AssignTarget) -> str:
+def extract_values_from_assign_target(target: cst.AssignTarget) -> list[str]:
     # TODO: maybe a better way to extract the underlying
-    # var name/value out of an AssingTarget node
+    # var name/value out of an AssignTarget node
     if isinstance(target.target, cst.Name):
-        return target.target.value
+        return [target.target.value]
     elif isinstance(target.target, cst.Subscript):
-        return target.target.value.value
+        return [target.target.value.value]
     elif isinstance(target.target, cst.Attribute):
-        return target.target.value.value
-    else:
-        # TODO: hack to avoid the tuple assignment case for now
-        return None
+        return [target.target.value.value]
+    elif isinstance(target.target, cst.Tuple):
+        return [elem.value.value for elem in target.target.elements]
 
-    raise ValueError(f"Unsupported assign target type: {target}")
+    return None
+    # Probably missing some cases here
+    # raise ValueError(f"Unsupported assign target type: {target}")
 
 
 class StyleViolationsVisitor(cst.CSTVisitor, ABC):
@@ -119,15 +120,16 @@ class FunctionArgAssignVisitor(StyleViolationsVisitor):
 
         code_range = self.get_metadata(PositionProvider, node)
         current_function = self.function_stack[-1]
-        assign_target = node.target.value
-        assign_target = extract_value_from_assign_target(node)
-        if assign_target in current_function.arg_names:
-            self.violations.append(
-                StyleViolation(
-                    error_code=self.VIOLATION_ERROR_CODE,
-                    code_range=code_range,
+        assign_targets = extract_values_from_assign_target(node)
+
+        for assign_target in assign_targets:
+            if assign_target in current_function.arg_names:
+                self.violations.append(
+                    StyleViolation(
+                        error_code=self.VIOLATION_ERROR_CODE,
+                        code_range=code_range,
+                    )
                 )
-            )
 
     def visit_Assign_targets(self, node: cst.Assign):
         """
@@ -143,15 +145,15 @@ class FunctionArgAssignVisitor(StyleViolationsVisitor):
         current_function = self.function_stack[-1]
 
         for target in node.targets:
-            assign_target = extract_value_from_assign_target(target)
-
-            if assign_target in current_function.arg_names:
-                self.violations.append(
-                    StyleViolation(
-                        error_code=self.VIOLATION_ERROR_CODE,
-                        code_range=code_range,
+            assign_targets = extract_values_from_assign_target(target)
+            for assign_target in assign_targets:
+                if assign_target in current_function.arg_names:
+                    self.violations.append(
+                        StyleViolation(
+                            error_code=self.VIOLATION_ERROR_CODE,
+                            code_range=code_range,
+                        )
                     )
-                )
 
     def visit_FunctionDef(self, node: cst.FunctionDef):
         fn_args = []

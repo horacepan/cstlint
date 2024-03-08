@@ -91,10 +91,12 @@ class NestedFunctionVisitor(StyleViolationsVisitor):
         code_range = self.get_metadata(PositionProvider, node)
 
         if len(self.function_stack) > 0:
+            parent_func = self.function_stack[-1]
             self.violations.append(
                 StyleViolation(
                     error_code=self.VIOLATION_ERROR_CODE,
                     code_range=code_range,
+                    message=f"Function '{node.name.value}' is defined within function '{parent_func.name.value}'.",
                 )
             )
 
@@ -128,6 +130,7 @@ class FunctionArgAssignVisitor(StyleViolationsVisitor):
                     StyleViolation(
                         error_code=self.VIOLATION_ERROR_CODE,
                         code_range=code_range,
+                        message=f"Assigning to argument: '{assign_target}'",
                     )
                 )
 
@@ -152,6 +155,7 @@ class FunctionArgAssignVisitor(StyleViolationsVisitor):
                         StyleViolation(
                             error_code=self.VIOLATION_ERROR_CODE,
                             code_range=code_range,
+                            message=f"Assigning to function argument: '{assign_target}'.",
                         )
                     )
 
@@ -239,6 +243,15 @@ class AttrDecoratorVisitor(StyleViolationsVisitor):
                 continue
 
             assert decorator.decorator.func.attr.value == "s"
+            decorator_kws = {kw.keyword.value for kw in decorator.decorator.args}
+            if "auto_attribs" not in decorator_kws:
+                self.violations.append(
+                    StyleViolation(
+                        error_code=ViolationErrorCode.ATTR_DECORATOR,
+                        code_range=code_range,
+                        message="Missing auto_attribs keyword.",
+                    )
+                )
 
             for arg in decorator.decorator.args:
                 if arg.keyword.value not in [
@@ -251,6 +264,7 @@ class AttrDecoratorVisitor(StyleViolationsVisitor):
                         StyleViolation(
                             error_code=ViolationErrorCode.ATTR_DECORATOR,
                             code_range=code_range,
+                            message=f"{arg.keyword.value} is not an allowed keyword.",
                         )
                     )
 
@@ -259,6 +273,7 @@ class AttrDecoratorVisitor(StyleViolationsVisitor):
                         StyleViolation(
                             error_code=ViolationErrorCode.ATTR_DECORATOR,
                             code_range=code_range,
+                            message="auto_attribs must be True.",
                         )
                     )
 
@@ -267,6 +282,7 @@ class AttrDecoratorVisitor(StyleViolationsVisitor):
                         StyleViolation(
                             error_code=ViolationErrorCode.ATTR_DECORATOR,
                             code_range=code_range,
+                            message="kw_only must be True.",
                         )
                     )
 
@@ -275,5 +291,6 @@ class AttrDecoratorVisitor(StyleViolationsVisitor):
                         StyleViolation(
                             error_code=ViolationErrorCode.ATTR_DECORATOR,
                             code_range=code_range,
+                            message="repr must be False.",
                         )
                     )
